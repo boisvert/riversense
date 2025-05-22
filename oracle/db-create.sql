@@ -1,5 +1,5 @@
 
-/****** Database watersense ******/
+/****** Database riversense ******/
 
 /****** Table AppUser ******/
 
