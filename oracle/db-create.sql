@@ -4,13 +4,78 @@
 /****** Table AppUser ******/
 
 CREATE TABLE AppUser (
-    UserID     VARCHAR2(50 CHAR) NOT NULL,
-    UserName   VARCHAR2(50 CHAR),
-	UserEmail  VARCHAR2(50 CHAR),
-	Active     CHAR(1) NOT NULL CHECK (Active IN ('Y', 'N')),
+    UserID        VARCHAR2(50 CHAR) NOT NULL,
+    DisplayName   VARCHAR2(50 CHAR) NOT NULL,
+	UserEmail     VARCHAR2(50 CHAR) NOT NULL UNIQUE,
+    PasswordHash  VARCHAR2(64 CHAR) NOT NULL, -- 32-byte SHA256 hash in hex (64 characters)
+    Salt          VARCHAR2(32 CHAR) NOT NULL, -- 16 random bytes in hex (32 characters)
+    UserRole      VARCHAR2(10) DEFAULT 'pending' CHECK (UserRole IN ('admin', 'editor', 'viewer', 'pending')),
+    UserStatus    VARCHAR2(8) DEFAULT 'inactive' CHECK (UserStatus IN ('active', 'inactive')),
+    CreatedAt     TIMESTAMP DEFAULT SYSTIMESTAMP,
+    PasswordResetToken   VARCHAR2(64 CHAR),
+    PasswordResetExpiry  TIMESTAMP
     CONSTRAINT PK_AppUser PRIMARY KEY (UserID),
-	CONSTRAINT chk_email_format CHECK (REGEXP_LIKE(UserEmail, '^[^@]+@[^@]+\.[^@]+$'))
+	CONSTRAINT chk_email_format CHECK (REGEXP_LIKE(UserEmail, '^[^@]+@[^@]+\.[^@]+$')),
+	CONSTRAINT chk_hash CHECK (REGEXP_LIKE(PasswordHash,'^[A-F0-9]{64}$')
 );
+
+CREATE SEQUENCE seq_appuser_id START WITH 1 INCREMENT BY 1;
+
+CREATE OR REPLACE FUNCTION generate_appuser_id RETURN VARCHAR2 IS
+BEGIN
+    RETURN 'user' || TO_CHAR(seq_appuser_id.NEXTVAL)
+END;
+/
+
+CREATE OR REPLACE FUNCTION generate_salt RETURN VARCHAR2 IS
+    v_raw RAW(16);
+BEGIN
+    v_raw := DBMS_CRYPTO.RANDOMBYTES(16);
+    RETURN RAWTOHEX(v_raw);
+END;
+/
+
+CREATE OR REPLACE FUNCTION hash_password(p_password VARCHAR2, p_salt VARCHAR2) RETURN VARCHAR2 IS
+    v_hash RAW(32);
+BEGIN
+    v_hash := DBMS_CRYPTO.HASH(
+        UTL_I18N.STRING_TO_RAW(p_password || p_salt, 'AL32UTF8'),
+        DBMS_CRYPTO.HASH_SH256
+    );
+    RETURN RAWTOHEX(v_hash);
+END;
+/
+
+CREATE OR REPLACE PROCEDURE register_user (
+    p_displayname   IN VARCHAR2,
+    p_email         IN VARCHAR2,
+    p_password      IN VARCHAR2
+) AS
+    v_userid    VARCHAR2(50);
+    v_salt      VARCHAR2(32);
+    v_hash      VARCHAR2(64);
+BEGIN
+    -- Check for existing user
+    IF EXISTS (
+        SELECT 1 FROM app_users 
+        WHERE displayName = LOWER(p_displayname) OR userEmail = LOWER(p_email)
+    ) THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Name or email already exists.');
+    END IF;
+
+    -- normalise input	
+	v_userid := generate_appuser_id();
+    v_salt   := generate_salt();
+    v_hash   := hash_password(p_password, v_salt);
+
+    -- Insert new user
+    INSERT INTO AppUser (
+        UserID, DisplayName, UserEmail, PasswordHash, Salt
+    ) VALUES (
+        v_userid, LOWER(p_displayname), LOWER(p_email), v_hash, v_salt
+    );
+END;
+/
 
 /****** Table River ******/
 
@@ -425,3 +490,4 @@ BEGIN
     END IF;
 END;
 /
+
