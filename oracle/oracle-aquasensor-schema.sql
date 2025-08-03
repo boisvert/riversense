@@ -247,6 +247,8 @@ CREATE TABLE Sensor (
 	EnteredBy     VARCHAR2(50 CHAR),
 	UpdatedBy     VARCHAR2(50 CHAR),
 	Active        CHAR(1) NOT NULL CHECK (Active IN ('Y', 'N')),
+    ReadFrequency NUMBER(2),
+    FrequencySetFrom TIMESTAMP DEFAULT SYSTIMESTAMP,
     CONSTRAINT PK_Sensor PRIMARY KEY (SensorID),
     CONSTRAINT FK_Sensor_Place FOREIGN KEY (CurrentPlace, RiverID)
         REFERENCES Place (PlaceID, RiverID) ON DELETE CASCADE,
@@ -278,6 +280,22 @@ BEGIN
 END;
 /
 
+/****** Table SensorFrequency ******/
+
+CREATE TABLE SensorFrequency (
+    SensorID      VARCHAR2(50 CHAR) NOT NULL,
+    FrequencySetFrom TIMESTAMP NOT NULL,
+    FrequencySetTo TIMESTAMP DEFAULT SYSTIMESTAMP,
+    ReadFrequency NUMBER(2),  -- match Sensor table
+    Notes         VARCHAR2(3000 CHAR),
+	SetBy         VARCHAR2(50 CHAR),
+    CONSTRAINT PK_SensorFrequency PRIMARY KEY (SensorID, FrequencySetFrom),
+    CONSTRAINT FK_SensorFrequency_Sensor FOREIGN KEY (SensorID)
+        REFERENCES Sensor (SensorID) ON DELETE CASCADE,
+	CONSTRAINT FK_SensorCheck_SetBy FOREIGN KEY (SetBy)
+        REFERENCES AppUser (UserID) ON DELETE SET NULL
+);
+
 /****** Table SensorCheck ******/
 
 CREATE TABLE SensorCheck (
@@ -296,10 +314,29 @@ CREATE TABLE SensorCheck (
 );
 
 -- Archive sensor checks
+-- ###needs addition (2nd if) for read frequencies archive
 CREATE OR REPLACE TRIGGER trg_sensor_update_archive
 AFTER UPDATE ON Sensor
 FOR EACH ROW
 BEGIN
+IF ( NVL(:OLD.ReadFrequency, -1) != NVL(:NEW.RedaFrequency, -1)
+) THEN
+    INSERT INTO SensorFrequency (
+        SensorID,
+        FrequencySetFrom,
+        ReadFrequency,
+        Notes,
+        SetBy
+    ) VALUES (
+        :OLD.SensorID,
+        :OLD.,
+        :OLD.Status,
+        :OLD.BatteryLevel,
+        :OLD.Notes,
+        :OLD.UpdatedBy,
+        :OLD.Active
+    );
+end if;
 IF (
     NVL(:OLD.Status, '¤') != NVL(:NEW.Status, '¤') OR
     NVL(:OLD.BatteryLevel, -1) != NVL(:NEW.BatteryLevel, -1) OR
@@ -476,7 +513,7 @@ CREATE TABLE Measurement (
     SensorID  VARCHAR2(50 CHAR) NOT NULL,
     UnitID    VARCHAR2(50 CHAR) NOT NULL,
     DateTime  TIMESTAMP NOT NULL,
-    DateTimePlus6 TIMESTAMP,
+    DateTimePlusHalfPeriod TIMESTAMP,
     Reading   NUMBER(10,4),
     PRIMARY KEY (SensorID, UnitID, DateTime),
 	CONSTRAINT FK_Measurement_SensorCapability FOREIGN KEY (SensorID,UnitID)
@@ -484,15 +521,31 @@ CREATE TABLE Measurement (
 	
 ) ORGANIZATION INDEX;
 
-CREATE INDEX idx_measurement_plus6 ON Measurement(DateTimePlus6);
+CREATE INDEX idx_measurement_plus_halfp ON Measurement(DateTimePlusHalfPeriod);
 
--- populate the "time plus 6 minutes" at the recording of a new measurement
-CREATE OR REPLACE TRIGGER trg_measurement_plus6
+-- populate the "time plus half period" at the recording of a new measurement
+
+        :NEW.DateTimePlusHalfPeriod := :NEW.DateTime + INTERVAL '6' MINUTE;
+
+CREATE OR REPLACE TRIGGER trg_measurement_plus_halfp
 BEFORE INSERT ON Measurement
 FOR EACH ROW
+DECLARE
+    v_read_freq Sensor.ReadFrequency%TYPE;
 BEGIN
-    IF :NEW.DateTimePlus6 IS NULL THEN
-        :NEW.DateTimePlus6 := :NEW.DateTime + INTERVAL '6' MINUTE;
+    IF :NEW.DateTimePlusHalfPeriod IS NULL THEN
+        -- Get the read frequency for this sensor
+        SELECT ReadFrequency INTO v_read_freq
+        FROM Sensor
+        WHERE SensorID = :NEW.SensorID;
+
+        -- Avoid divide-by-zero or null errors
+        IF v_read_freq IS NOT NULL AND v_read_freq > 0 THEN
+            :NEW.DateTimePlusHalfPeriod := :NEW.DateTime + NUMTODSINTERVAL(30 / v_read_freq, 'MINUTE');
+        ELSE
+            -- Raise an error if frequency is not usable
+            RAISE_APPLICATION_ERROR(-20002, 'Invalid or missing ReadFrequency for sensor ' || :NEW.SensorID);
+        END IF;
     END IF;
 END;
 /
