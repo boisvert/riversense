@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f4f4f4; /* Light grey background for the page */
+            margin: 0;
+            padding: 0;
+        }
+        /*Generic navbar*/
+        .navbar {
+            background-color: #0277bd; /* Blue background for the navbar */
+        }
+
+        .navbar-brand img {
+            height: 60px; /* Adjusted logo size */
+        }
+
+        .navbar-nav .nav-link {
+            color: white; /* White text for navbar links */
+            font-weight: 600; /* Slightly bolder text */
+            transition: color 0.3s ease; /* Smooth color transition on hover */
+        }
+
+        .navbar-nav .nav-link:hover {
+            color: #090909; /* Black text on hover */
+        }
+        .navbar-nav .nav-link.active {
+            background-color: #f3f7f8;
+            color:#0277bd; 
+        }
+
+        .btn-48 {
+            background-color: #3498db; /* Button background color */
+            color: #fff; /* Button text color */
+            border-radius: 5px; /* Rounded corners for the button */
+            margin:2%;
+        }
+
+        .btn-48:hover {
+            background-color: #043352; /* Darker blue on hover */
+            color:white;
+        }
+        .card {
+            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+            transition: 0.3s;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        #panel2 {
+            width: 100%;
+            height: 400px; /* Increased height for the graphs */
+        }
+        /* Panel styling */
+        .panel {
+            flex: 1;
+            border: 1px solid #ccc;
+            display: none; /* Initially hidden */
+        }
+
+        /* By default, Panel 1 is visible */
+        .panel1 {
+            display: block; /* Initially shown */
+            height: 500px;
+            margin:auto;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+    <title>Dashboard</title>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="map">
+                <img src="{{ url_for('static', filename='Logos/aquasensor-logo.png') }}" alt="Logo">
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                    <a  class="nav-link active" aria-current="page" onclick="showPanel('panel1', this)">Panel 1</a>
+                    </li>
+                    <li class="nav-item">
+                    <a  class="nav-link" onclick="showPanel('panel2', this)">Panel 2</a>
+                    </li>
+                </ul>
+                <a href="index_sensor" class="btn btn-48">Register new Sensor</a>
+            </div>
+        </div>
+    </nav>
+    <!-- Panels -->
+    <div class="panel panel1">
+        <iframe src="{{ url_for('index') }}" title="Panel 1"></iframe>
+    </div>
+    <div class="panel panel2">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <br>
+                        <h2>All Sensor Data</h2>
+                        <br>
+                        <iframe src="{{ url_for('panel2') }}" title="Panel 2" id ='panel2'></iframe>
+                    </div>
+                </div>
+            </div>           
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+    <script>
+        function showPanel(panelClass, element) {
+            // Hide all panels
+            const panels = document.querySelectorAll('.panel');
+            panels.forEach(panel => {
+                panel.style.display = 'none';
+            });
+    
+            // Show the selected panel
+            const selectedPanel = document.querySelector(`.${panelClass}`);
+            selectedPanel.style.display = 'block';
+
+            // Remove active class from all nav links
+            const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+            });
+    
+            // Add active class to the clicked link
+            element.classList.add('active');
+
+        }
+    </script>
+</body>
+</html>

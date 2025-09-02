@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River Data Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #e0f7fa;
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            animation: backgroundFade 3s infinite alternate;
+        }
+
+        @keyframes backgroundFade {
+            0% {
+                background-color: #e0f7fa;
+            }
+            100% {
+                background-color: #b2ebf2;
+            }
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+        }
+
+        .form-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 40%;
+            margin: 20px;
+            animation: slideDown 0.5s forwards ease-out;
+        }
+
+        .river-list {
+            width: 60%;
+            margin: 20px;
+            overflow-y: auto;
+        }
+
+        .river-list h2 {
+            text-align: center;
+            color: #00796b;
+        }
+
+        .river-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .river-table th, .river-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .river-table th {
+            background-color: #00796b;
+            color: white;
+        }
+
+        @keyframes slideDown {
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .form-container h2 {
+            text-align: center;
+            color: #00796b;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-container h2::after {
+            content: '';
+            width: 50px;
+            height: 4px;
+            background-color: #004d40;
+            display: block;
+            margin: 10px auto;
+            border-radius: 2px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: #004d40;
+        }
+
+        .form-group button {
+            width: 100%;
+            padding: 12px;
+            background-color: #00796b;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .form-group button:hover {
+            background-color: #004d40;
+        }
+
+        .form-group button:active {
+            background-color: #00332e;
+        }
+
+        .form-group button:focus {
+            outline: none;
+        }
+
+        .back-button {
+            margin-top: 15px;
+            background-color: #00796b;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .back-button:hover {
+            background-color: #004d40;
+        }
+
+        .back-button:active {
+            background-color: #00332e;
+        }
+
+        .back-button:focus {
+            outline: none;
+        }
+
+        .update-button {
+            background-color: #00796b;
+            color: white;
+            padding: 5px;
+            border: none;
+            border-radius: 4px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .update-button:hover {
+            background-color: #004d40;
+        }
+
+        .update-button:active {
+            background-color: #00332e;
+        }
+
+        .update-button:focus {
+            outline: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 12px;
+            animation: slideDown 0.5s forwards ease-out;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h2>River Data Input</h2>
+            <form id="riverForm">
+                <div class="form-group">
+                    <label for="riverName">River Name</label>
+                    <input type="text" id="riverName" name="riverName" required>
+                </div>
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" name="location" required>
+                </div>
+                <div class="form-group">
+                    <label for="latitude">Latitude</label>
+                    <input type="text" id="latitude" name="latitude" required>
+                </div>
+                <div class="form-group">
+                    <label for="longitude">Longitude</label>
+                    <input type="text" id="longitude" name="longitude" required>
+                </div>
+                <div class="form-group">
+                    <label for="status">Status</label>
+                    <select id="status" name="status" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button type="submit">Submit</button>
+                </div>
+            </form>
+            <button class="back-button" onclick="goBack()">Back</button>
+        </div>
+        <div class="river-list">
+            <h2>Registered Rivers</h2>
+            <table class="river-table">
+                <thead>
+                    <tr>
+                        <th>River ID</th>
+                        <th>River Name</th>
+                        <th>Location</th>
+                        <th>Latitude</th>
+                        <th>Longitude</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="riverList"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="updateModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideUpdateForm()">&times;</span>
+            <h2>Update River Info</h2>
+            <form id="updateRiverForm">
+                <input type="hidden" id="updateRiverID" name="riverID">
+                <div class="form-group">
+                    <label for="updateRiverName">River Name</label>
+                    <input type="text" id="updateRiverName" name="riverName" required>
+                </div>
+                <div class="form-group">
+                    <label for="updateLocation">Location</label>
+                    <input type="text" id="updateLocation" name="location" required>
+                </div>
+                <div class="form-group">
+                    <label for="updateLatitude">Latitude</label>
+                    <input type="text" id="updateLatitude" name="latitude" required>
+                </div>
+                <div class="form-group">
+                    <label for="updateLongitude">Longitude</label>
+                    <input type="text" id="updateLongitude" name="longitude" required>
+                </div>
+                <div class="form-group">
+                    <label for="updateStatus">Status</label>
+                    <select id="updateStatus" name="status" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button type="submit">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('http://127.0.0.1:5000/get_rivers')
+                .then(response => response.json())
+                .then(data => {
+                    const riverList = document.getElementById('riverList');
+                    data.rivers.forEach(river => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${river.riverID}</td>
+                            <td>${river.riverName}</td>
+                            <td>${river.location}</td>
+                            <td>${river.latitude}</td>
+                            <td>${river.longitude}</td>
+                            <td>${river.status}</td>
+                            <td><button class="update-button" onclick="showUpdateForm(${river.riverID}, '${river.riverName}', '${river.location}', '${river.latitude}', '${river.longitude}', '${river.status}')">Update</button></td>
+                        `;
+                        riverList.appendChild(row);
+                    });
+                })
+                .catch(error => console.error('Error fetching rivers:', error));
+        });
+
+        document.getElementById('riverForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const riverName = document.getElementById('riverName').value;
+            const location = document.getElementById('location').value;
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const status = document.getElementById('status').value;
+
+            const riverData = {
+                riverName: riverName,
+                location: location,
+                latitude: parseFloat(latitude),
+                longitude: parseFloat(longitude),
+                status: status
+            };
+
+            fetch('http://127.0.0.1:5000/submit_river_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(riverData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Success:', data);
+                alert('River data submitted successfully!');
+                window.location.reload(); // Reload the page to update the river list
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error submitting river data.');
+            });
+        });
+
+        document.getElementById('updateRiverForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const riverID = document.getElementById('updateRiverID').value;
+            const riverName = document.getElementById('updateRiverName').value;
+            const location = document.getElementById('updateLocation').value;
+            const latitude = document.getElementById('updateLatitude').value;
+            const longitude = document.getElementById('updateLongitude').value;
+            const status = document.getElementById('updateStatus').value;
+
+            const riverData = {
+                riverID: riverID,
+                riverName: riverName,
+                location: location,
+                latitude: parseFloat(latitude),
+                longitude: parseFloat(longitude),
+                status: status
+            };
+
+            fetch(`http://127.0.0.1:5000/update_river_info/${riverID}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(riverData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    console.log('Success:', data);
+                    alert('River data updated successfully!');
+                    hideUpdateForm();
+                    window.location.reload(); // Reload the page to update the river list
+                } else {
+                    throw new Error(data.message);
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error updating river data.');
+            });
+        });
+
+        function goBack() {
+            window.history.back();
+        }
+
+        function showUpdateForm(riverID, riverName, location, latitude, longitude, status) {
+            document.getElementById('updateRiverID').value = riverID;
+            document.getElementById('updateRiverName').value = riverName;
+            document.getElementById('updateLocation').value = location;
+            document.getElementById('updateLatitude').value = latitude;
+            document.getElementById('updateLongitude').value = longitude;
+            document.getElementById('updateStatus').value = status;
+
+            const modal = document.getElementById('updateModal');
+            modal.style.display = 'block';
+        }
+
+        function hideUpdateForm() {
+            const modal = document.getElementById('updateModal');
+            modal.style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('updateModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
