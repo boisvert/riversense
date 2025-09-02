@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700,800" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <title>Line Graph</title>
+    <style>
+        .card {
+            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+            transition: 0.3s;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        #line1, #line2, #line3, #line4, #line5, #line6 {
+            width: 100%;
+            height: 400px; /* Increased height for the graphs */
+        }
+
+        .dropdown {
+            margin: 2px;
+            padding: 2px;
+            display: inline-block;
+        }
+        .rname {
+            margin: 2px;
+            padding: 2px;
+            display: inline-block;
+        }
+        .rname h5 {
+            margin: 0;
+            color: #0b0c0c; /* Blue color for the register text */
+        }
+        .row-right {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+    </style>
+</head>
+<body>
+    <br>
+    <div class="container">
+        <div class="row row-right"> 
+            <div class="col-auto">
+            <div class="rname">
+                <h5 id="rivername"></h5>
+            </div>
+            </div>
+            <div class="col-auto">
+            <div class="dropdown">
+                <select id="sensorDropdown" class="form-select">
+                    <!-- Options will be populated by JavaScript -->
+                </select>
+            </div>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <div class="row">
+            <div class="col-12 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div id="line1"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div id="line2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div id="line3"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div id="line4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div id="line5"></div>
+                    </div>
+                </div>
+            </div>           
+        </div>
+    </div>
+    
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script>
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        const sensorId = getCookie('sensorID');
+        const riverID = getCookie('riverID');
+        console.log(sensorId,riverID);
+        console.log(typeof(riverID));  
+
+        // Function to fetch and populate sensor IDs
+        let currentSensorId = null;
+        // Set initial sensor ID if available and update graphs
+        currentSensorId = getCookie('sensorID') || null;
+
+        function getRiverName(){
+            fetch(`http://127.0.0.1:5000/get_river_name?riverID=${riverID}`)
+                .then(response => response.json())
+                .then(data => { 
+                    const rivernameElement = document.getElementById('rivername');
+                    const riverName = data.length > 0 ? data[0].riverName : 'Unknown';
+                    rivernameElement.innerHTML = `River: ${riverName}`; 
+
+                })
+                .catch(error => console.error('Error fetching River Name :', error));
+        }
+        
+        function loadSensorIds() {
+            fetch(`http://127.0.0.1:5000/get_sensor_names?riverID=${riverID}`)
+                .then(response => response.json())
+                .then(sensorIds => {
+                    const dropdown = document.getElementById('sensorDropdown');
+                    //dropdown.innerHTML = ''; // Clear existing options
+                    sensorIds.forEach(sensor => {
+                        const option = document.createElement('option');
+                        option.value = sensor.sensorName;
+                        option.textContent = sensor.sensorName;
+                        dropdown.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error fetching sensor IDs:', error));
+        }
+
+        function fetchDataAndUpdateGraphs() {
+            if (!currentSensorId) return; // Do nothing if no sensor ID is selected
+
+            updateTodaysData();
+            updateTodaysData2();
+            //updateHistoricalData();
+            updateHistOxygenData();
+            updateHistTemperatureData();
+            //updateMovingAvgData();
+            updateDailyAveragesGraph();
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const options = { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+            return date.toLocaleString('en-US', options);
+        }
+        const timeFormatter = (value) => {
+                const date = new Date(value);
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}`;
+        };
+
+        function updateTodaysData() {
+            fetch(`http://127.0.0.1:5000/get_todays_sensor_data?SensorID=${currentSensorId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const dateList = data.map(item => timeFormatter(new Date(item.created_at)));
+                    const oxygen = data.map(item => item.percent_dissolved_oxygen);
+
+                    const chart1 = echarts.init(document.getElementById("line1"));
+                    const option1 = {
+                        title: {
+                            left: 'center',
+                            text: `Dissolved Oxygen % (${currentSensorId})`
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: dateList,
+                            boundaryGap: false
+                        },
+                        yAxis: [
+                            {
+                                type: 'value',
+                                name: 'Oxygen Level (%)',
+                                position: 'left',
+                                splitLine: {
+                                    show: false
+                                }
+                            }
+                        ],
+                        grid: {
+                            bottom: '30%'
+                        },
+                        series: [
+                            {
+                                name: "Oxygen Levels",
+                                type: 'line',
+                                yAxisIndex: 0,
+                                showSymbol: false,
+                                data: oxygen,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid'
+                                },
+                                areaStyle: {
+                                    color: {
+                                    type: 'linear',
+                                    x: 0,
+                                    y: 0,
+                                    x2: 0,
+                                    y2: 1,
+                                    x2: 1,
+                                    y2: 0,
+                                    global: false,
+                                    colorStops: [
+                                        { offset: 0, color: 'rgba(0, 255, 255, 0.3)' },
+                                        { offset: 1, color: 'rgba(0, 0, 255, 0.3)' }
+                                    ]
+                                    }
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100
+                            },
+                            {
+                                type: 'slider',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100,
+                                handleSize: '50%', // Increased size of the handle
+                                handleStyle: {
+                                    color: '#fff',
+                                    borderColor: '#aaa',
+                                    borderWidth: 2
+                                },
+                                textStyle: {
+                                    color: '#000',
+                                    fontSize: 14 // Increased text size for better visibility
+                                },
+                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                dataBackground: {
+                                    areaStyle: {
+                                        color: 'rgba(0,0,0,0.2)'
+                                    }
+                                },
+                                borderColor: '#ddd',
+                                fillerColor: 'rgba(0,0,0,0.2)',
+                                height: 8 // Increased height of the slider track for more space
+                            }
+                        ]
+                    };
+                    chart1.setOption(option1);
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+            
+        function updateTodaysData2() {
+            fetch(`http://127.0.0.1:5000/get_todays_sensor_data?SensorID=${currentSensorId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const dateList = data.map(item => timeFormatter(new Date(item.created_at)));
+                    const oxygen = data.map(item => item.percent_dissolved_oxygen);
+                    const temperature = data.map(item => item.temperature);
+
+                    const chart2 = echarts.init(document.getElementById("line2"));
+                    const option2 = {
+                        visualMap: [{
+                            show: false,
+                            type: 'continuous',
+                            seriesIndex: 0,
+                            dimension: 0,
+                            min: 0,
+                            max: dateList.length - 1,
+                            inRange: {
+                                color: ['#43ABF8', '#0407DC']
+                            }
+                        }],
+                        title: {
+                            left: 'center',
+                            text: `Dissolved Oxygen % and Temperature (${currentSensorId})`
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: dateList
+                        },
+                        yAxis: [
+                            {
+                                type: 'value',
+                                name: 'Oxygen Level (%)',
+                                position: 'left',
+                                splitLine: {
+                                    show: false
+                                }
+                            },
+                            {
+                                type: 'value',
+                                name: 'Temperature (°C)',
+                                position: 'right',
+                                splitLine: {
+                                    show: false
+                                }
+                            }
+                        ],
+                        grid: {
+                            bottom: '30%'
+                        },
+                        series: [
+                            {
+                                name: "Oxygen Levels",
+                                type: 'line',
+                                yAxisIndex: 0,
+                                showSymbol: false,
+                                data: oxygen,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid'
+                                },
+                                
+                            },
+                            {
+                                name: "Temperature",
+                                type: 'line',
+                                yAxisIndex: 1,
+                                showSymbol: false,
+                                data: temperature,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid'
+                                },
+                                itemStyle: {
+                                    color: '#ff6600'
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100
+                            },
+                            {
+                                type: 'slider',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100,
+                                handleSize: '50%', // Increased size of the handle
+                                handleStyle: {
+                                    color: '#fff',
+                                    borderColor: '#aaa',
+                                    borderWidth: 2
+                                },
+                                textStyle: {
+                                    color: '#000',
+                                    fontSize: 14 // Increased text size for better visibility
+                                },
+                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                dataBackground: {
+                                    areaStyle: {
+                                        color: 'rgba(0,0,0,0.2)'
+                                    }
+                                },
+                                borderColor: '#ddd',
+                                fillerColor: 'rgba(0,0,0,0.2)',
+                                height: 8 // Increased height of the slider track for more space
+                            }
+                        ]
+                    };
+
+                    chart2.setOption(option2);
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+        function updateHistOxygenData() {
+            fetch(`http://127.0.0.1:5000/get_sensor_data?SensorID=${currentSensorId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const dateList = data.map(item => formatDate(item.created_at));
+                    const oxygen = data.map(item => item.percent_dissolved_oxygen);
+
+                    const chartOxygen = echarts.init(document.getElementById("line3"));
+                    const optionOxygen = {
+                        title: {
+                            left: 'center',
+                            text: `Historical Data - Dissolved Oxygen % (${currentSensorId})`
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: dateList
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: 'Oxygen Level (%)',
+                            splitLine: {
+                                show: false
+                            }
+                        },
+                        grid: {
+                            bottom: '30%'
+                        },
+                        series: [
+                            {
+                                name: "Oxygen Levels",
+                                type: 'bar',
+                                data: oxygen,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid'
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: 0
+                            },
+                            {
+                                type: 'slider',
+                                xAxisIndex: 0,
+                                handleSize: '50%',
+                                handleStyle: {
+                                    color: '#fff',
+                                    borderColor: '#aaa',
+                                    borderWidth: 2
+                                },
+                                textStyle: {
+                                    color: '#000',
+                                    fontSize: 14
+                                },
+                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                dataBackground: {
+                                    areaStyle: {
+                                        color: 'rgba(0,0,0,0.2)'
+                                    }
+                                },
+                                borderColor: '#ddd',
+                                fillerColor: 'rgba(0,0,0,0.2)',
+                                height: 8
+                            }
+                        ]
+                    };
+
+                    chartOxygen.setOption(optionOxygen);
+                })
+                .catch(error => console.error('Error fetching oxygen data:', error));
+        }
+        function updateHistTemperatureData() {
+            fetch(`http://127.0.0.1:5000/get_sensor_data?SensorID=${currentSensorId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const dateList = data.map(item => formatDate(item.created_at));
+                    const temperature = data.map(item => item.temperature);
+
+                    const chartTemperature = echarts.init(document.getElementById("line4"));
+                    const optionTemperature = {
+                        title: {
+                            left: 'center',
+                            text: `Historical Data - Temperature (°C)(${currentSensorId})`
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: dateList
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: 'Temperature (°C)',
+                            splitLine: {
+                                show: false
+                            }
+                        },
+                        grid: {
+                            bottom: '30%'
+                        },
+                        series: [
+                            {
+                                name: "Temperature",
+                                type: 'bar',
+                                data: temperature,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid'
+                                },
+                                itemStyle: {
+                                    color: '#ff6600'
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: 0
+                            },
+                            {
+                                type: 'slider',
+                                xAxisIndex: 0,
+                                handleSize: '50%',
+                                handleStyle: {
+                                    color: '#fff',
+                                    borderColor: '#aaa',
+                                    borderWidth: 2
+                                },
+                                textStyle: {
+                                    color: '#000',
+                                    fontSize: 14
+                                },
+                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                dataBackground: {
+                                    areaStyle: {
+                                        color: 'rgba(0,0,0,0.2)'
+                                    }
+                                },
+                                borderColor: '#ddd',
+                                fillerColor: 'rgba(0,0,0,0.2)',
+                                height: 8
+                            }
+                        ]
+                    };
+
+                    chartTemperature.setOption(optionTemperature);
+                })
+                .catch(error => console.error('Error fetching temperature data:', error));
+        }
+
+        /*function updateHistoricalData() {
+                    fetch(`http://127.0.0.1:5000/get_sensor_data?SensorID=${currentSensorId}`)
+            .then(response => response.json())
+            .then(data => {
+                const dateList = data.map(item => formatDate(item.created_at));
+                const oxygen = data.map(item => item.percent_dissolved_oxygen);
+                const temperature = data.map(item => item.temperature);
+
+                const chart3 = echarts.init(document.getElementById("line3"));
+                const option3 = {
+                    visualMap: [{
+                        show: false,
+                        type: 'continuous',
+                        seriesIndex: 0,
+                        dimension: 0,
+                        min: 0,
+                        max: dateList.length - 1,
+                        inRange: {
+                            color: ['#43ABF8', '#0407DC']
+                        }
+                    }],
+                    title: {
+                        left: 'center',
+                        text: 'Dissolved Oxygen % and Temperature'
+                    },
+                    tooltip: {
+                        trigger: 'axis'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: dateList
+                    },
+                    yAxis: [
+                        {
+                            type: 'value',
+                            name: 'Oxygen Level (%)',
+                            position: 'left',
+                            splitLine: {
+                                show: false
+                            }
+                        },
+                        {
+                            type: 'value',
+                            name: 'Temperature (°C)',
+                            position: 'right',
+                            splitLine: {
+                                show: false
+                            }
+                        }
+                    ],
+                    grid: {
+                        bottom: '30%'
+                    },
+                    series: [
+                        {
+                            name: "Oxygen Levels",
+                            type: 'line',
+                            yAxisIndex: 0,
+                            showSymbol: false,
+                            data: oxygen,
+                            lineStyle: {
+                                width: 2,
+                                type: 'solid'
+                            }
+                        },
+                        {
+                            name: "Temperature",
+                            type: 'line',
+                            yAxisIndex: 1,
+                            showSymbol: false,
+                            data: temperature,
+                            lineStyle: {
+                                width: 2,
+                                type: 'solid'
+                            },
+                            itemStyle: {
+                                color: '#ff6600'
+                            }
+                        }
+                    ],
+                    dataZoom: [
+                        {
+                            type: 'inside', // Enables zooming and filtering using mouse wheel or touch gestures
+                            xAxisIndex: 0
+                        },
+                        {
+                            type: 'slider', // Adds a slider to control the zoom and filtering range
+                            xAxisIndex: 0,
+                            handleSize: '50%', // Adjust size of the handle
+                            handleStyle: {
+                                color: '#fff',
+                                borderColor: '#aaa',
+                                borderWidth: 2
+                            },
+                            textStyle: {
+                                color: '#000',
+                                fontSize: 14 // Adjust text size for better readability
+                            },
+                            backgroundColor: 'rgba(0,0,0,0.1)',
+                            dataBackground: {
+                                areaStyle: {
+                                    color: 'rgba(0,0,0,0.2)'
+                                }
+                            },
+                            borderColor: '#ddd',
+                            fillerColor: 'rgba(0,0,0,0.2)',
+                            height: 8 // Adjust height of the slider track
+                        }
+                    ]
+                };
+
+                chart3.setOption(option3);
+            })
+            .catch(error => console.error('Error fetching data:', error));
+
+        }*/
+
+        function handleSensorChange() {
+            currentSensorId = document.getElementById('sensorDropdown').value;
+            fetchDataAndUpdateGraphs();
+        }
+        /*function calculateMovingAverage(data, windowSize) {
+            let movingAvg = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < windowSize - 1) {
+                    movingAvg.push(null); // No value until the window size is met
+                } else {
+                    const windowData = data.slice(i - windowSize + 1, i + 1);
+                    const average = windowData.reduce((sum, value) => sum + value, 0) / windowSize;
+                    movingAvg.push(average);
+                }
+            }
+            return movingAvg;
+        }
+        function updateMovingAvgData() {
+            fetch(`http://127.0.0.1:5000/get_sensor_data?SensorID=${currentSensorId}`)
+            .then(response => response.json())
+            .then(data => {
+                    const dateList = data.map(item => formatDate(item.created_at));
+                    const oxygen = data.map(item => item.percent_dissolved_oxygen);
+                    const temperature = data.map(item => item.temperature);
+
+                    // Calculate moving average (5-point moving average)
+                    const movingAvgOxygen = calculateMovingAverage(oxygen, 5);
+                    const movingAvgTemp = calculateMovingAverage(temperature,5);
+
+                    const chart4 = echarts.init(document.getElementById("line5"));
+                    const option4 = {
+                        title: {
+                            left: 'center',
+                            text: 'Moving Averages for Dissolved Oxygen and Temperature'
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: dateList,
+                            boundaryGap: false
+                        },
+                        yAxis: [
+                            {
+                                type: 'value',
+                                name: 'Value',
+                                position: 'left',
+                                splitLine: {
+                                    show: false
+                                }
+                            }
+                        ],
+                        grid: {
+                            bottom: '30%'
+                        },
+                        series: [
+                            {
+                                name: "Moving Average - Dissolved Oxygen",
+                                type: 'line',
+                                yAxisIndex: 0,
+                                showSymbol: false,
+                                data: movingAvgOxygen,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid',
+                                    color: '#00FF00' // Green for dissolved oxygen
+                                }
+                            },
+                            {
+                                name: "Moving Average - Temperature",
+                                type: 'line',
+                                yAxisIndex: 0,
+                                showSymbol: false,
+                                data: movingAvgTemp,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'dashed',
+                                    color: '#FF0000' // Red for temperature
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100
+                            },
+                            {
+                                type: 'slider',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100,
+                                handleSize: '50%',
+                                handleStyle: {
+                                    color: '#fff',
+                                    borderColor: '#aaa',
+                                    borderWidth: 2
+                                },
+                                textStyle: {
+                                    color: '#000',
+                                    fontSize: 14
+                                },
+                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                dataBackground: {
+                                    areaStyle: {
+                                        color: 'rgba(0,0,0,0.2)'
+                                    }
+                                },
+                                borderColor: '#ddd',
+                                fillerColor: 'rgba(0,0,0,0.2)',
+                                height: 8
+                            }
+                        ]
+                    };
+                    chart4.setOption(option4);
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }*/
+        function updateDailyAveragesGraph() {
+            fetch(`http://127.0.0.1:5000/get_sensor_data?SensorID=${currentSensorId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Enter");
+
+                    const dailyAverages = calculateDailyAverages(data);
+
+                    const dates = dailyAverages.map(item => item.day);
+                    const tempAverages = dailyAverages.map(item => item.tempAvg);
+                    const oxyAverages = dailyAverages.map(item => item.oxyAvg);
+                    console.log(oxyAverages);    
+                    const chart = echarts.init(document.getElementById("line5"));
+                    const option = {
+                        title: {
+                            left: 'center',
+                            text: `Daily Averages for Temperature and Dissolved Oxygen (${currentSensorId})`
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: dates,
+                            boundaryGap: false
+                        },
+                        yAxis: [
+                            {
+                                type: 'value',
+                                name: 'Value',
+                                position: 'left',
+                                splitLine: {
+                                    show: false
+                                }
+                            }
+                        ],
+                        series: [
+                            {
+                                name: "Average Temperature",
+                                type: 'line',
+                                yAxisIndex: 0,
+                                showSymbol: false,
+                                data: tempAverages,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid',
+                                    color: '#FF0000' // Red for temperature
+                                }
+                            },
+                            {
+                                name: "Average Dissolved Oxygen",
+                                type: 'line',
+                                yAxisIndex: 0,
+                                showSymbol: false,
+                                data: oxyAverages,
+                                lineStyle: {
+                                    width: 2,
+                                    type: 'solid',
+                                    color: '#00FF00' // Green for dissolved oxygen
+                                }
+                            }
+                        ],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100
+                            },
+                            {
+                                type: 'slider',
+                                xAxisIndex: 0,
+                                start: 0,
+                                end: 100,
+                                handleSize: '50%',
+                                handleStyle: {
+                                    color: '#fff',
+                                    borderColor: '#aaa',
+                                    borderWidth: 2
+                                },
+                                textStyle: {
+                                    color: '#000',
+                                    fontSize: 14
+                                },
+                                backgroundColor: 'rgba(0,0,0,0.1)',
+                                dataBackground: {
+                                    areaStyle: {
+                                        color: 'rgba(0,0,0,0.2)'
+                                    }
+                                },
+                                borderColor: '#ddd',
+                                fillerColor: 'rgba(0,0,0,0.2)',
+                                height: 8
+                            }
+                        ]
+                    };
+                    chart.setOption(option);
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+        function calculateDailyAverages(data) {
+            const dailyData = {};
+            data.forEach(item => {
+                const date = new Date(item.created_at);
+                const day = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+
+                if (!dailyData[day]) {
+                    dailyData[day] = { temperature: [], oxygen: [] };
+                }
+
+                dailyData[day].temperature.push(item.temperature);
+                dailyData[day].oxygen.push(item.percent_dissolved_oxygen);
+            });
+
+            // Calculate averages
+            const dailyAverages = Object.keys(dailyData).map(day => {
+                const tempAvg = dailyData[day].temperature.reduce((a, b) => a + b, 0) / dailyData[day].temperature.length;
+                const oxyAvg = dailyData[day].oxygen.reduce((a, b) => a + b, 0) / dailyData[day].oxygen.length;
+                return { day, tempAvg, oxyAvg };
+            });
+
+            return dailyAverages;
+        }
+
+
+        // Initial data loading
+        getRiverName();
+        loadSensorIds();
+
+        // Event listener for dropdown change
+        document.getElementById('sensorDropdown').addEventListener('change', handleSensorChange);
+
+        
+        fetchDataAndUpdateGraphs();
+
+        // Refresh every 1 minute (60000 ms)
+        setInterval(fetchDataAndUpdateGraphs, 60000);
+
+        // Initial fetch
+        /*updateTodaysData();
+        updateTodaysData2();
+        updateHistoricalData();*/
+
+        // Refresh every minute (60000 ms)
+        /*setInterval(updateTodaysData, 60000);
+        setInterval(updateTodaysData2,60000);
+        setInterval(updateHistOxygenData, 60000);
+        setInterval(updateHistTemperatureData, 60000);*/
+        //setInterval(updateHistoricalData, 60000);
+ 
+    </script> 
+</body>
+</html>

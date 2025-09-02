@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700,800" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <title>Dynamic Slideshow</title>
+    <style>
+        .card {
+            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+            transition: 0.3s;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+        .slideshow-container {
+            position: relative;
+            width: 40%;
+            margin: auto;
+            height: 100%; 
+            margin-left: auto; 
+            margin-right: auto;
+        }
+        .slide {
+            display: none;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            line-height: 200px; /* Adjust based on slide content */
+            background-color: #f1f1f1;
+        }
+        .prev, .next {
+            cursor: pointer;
+            position: absolute;
+            top: 50%;
+            width: auto;
+            padding: 16px;
+            margin-top: -22px;
+            color: black;
+            font-weight: bold;
+            font-size: 18px;
+            transition: 0.6s ease;
+            border-radius: 0 3px 3px 0;
+            user-select: none;
+        }
+        .next {
+            right: 0;
+            border-radius: 3px 0 0 3px;
+        }
+        .prev:hover, .next:hover {
+            background-color: rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="slideshow-container">
+        <!-- Slides will be inserted here dynamically -->
+    </div>
+
+    <a class="prev" onclick="plusSlides(-1)">&#10094;</a>
+    <a class="next" onclick="plusSlides(1)">&#10095;</a>
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script>
+        let slideIndex = 0;
+
+        function showSlides() {
+            const slides = document.querySelectorAll('.slide');
+            slides.forEach((slide, index) => {
+                slide.style.display = (index === slideIndex) ? 'block' : 'none';
+            });
+        }
+
+        function plusSlides(n) {
+            const slides = document.querySelectorAll('.slide');
+            slideIndex = (slideIndex + n + slides.length) % slides.length;
+            showSlides();
+        }
+
+        function createSlides(data) {
+            const container = document.querySelector('.slideshow-container');
+            container.innerHTML = ''; // Clear existing slides
+            console.log(data);
+            data.forEach(item => {
+                const slide = document.createElement('div');
+                slide.className = 'slide';
+                // Add a container for the chart inside each slide
+                const chartContainer = document.createElement('div');
+                chartContainer.style.width = '600px';
+                chartContainer.style.position = 'relative';
+                chartContainer.style.height = '300%'; // Adjust as needed
+                //chartContainer.style.alignContent = 'center';
+                chartContainer.id = `chart-${item}`; // Unique ID for each chart
+
+                slide.appendChild(chartContainer);
+                container.appendChild(slide);
+                // Initialize the chart only after appending to DOM
+                setTimeout(() => {
+                    updateHistoricalData(item, chartContainer.id);
+                }, 0);
+            });
+
+            showSlides(); // Show the first slide
+        }
+
+       
+        function loadSensorNames() {
+            return fetch(`http://127.0.0.1:5000/get_sensors_for_map`)
+                .then(response => response.json())
+                .then(data => {
+                       // Extract sensor names into a list
+                        const sensorNames = data
+                        .filter(sensor => sensor.status === 'active')
+                        .map(sensor => sensor.sensorName);
+                        return sensorNames; 
+                })
+                .catch(error => {
+                    console.error('Error fetching sensor names:', error);
+                    return []; // Return an empty list in case of an error
+                });
+        }
+        //Extract data
+        //Data = loadSensorNames();
+        loadSensorNames().then(sensorNames => {
+            console.log(Array.isArray(sensorNames)); // true if data is an array
+            console.log(sensorNames); // The array of sensor names
+            // Create slides dynamically with example data
+            createSlides(sensorNames);
+        });
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const options = { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+            return date.toLocaleString('en-US', options);
+        }
+
+        function updateHistoricalData(currentSensorId,chartId) {
+                    fetch(`http://127.0.0.1:5000/get_sensor_data?SensorID=${currentSensorId}`)
+            .then(response => response.json())
+            .then(data => {
+                const dateList = data.map(item => formatDate(item.created_at));
+                const oxygen = data.map(item => item.percent_dissolved_oxygen);
+                const temperature = data.map(item => item.temperature);
+                const chartContainer = document.getElementById(chartId);
+                const chart3 = echarts.init(chartContainer);
+                const option3 = {
+                    visualMap: [{
+                        show: false,
+                        type: 'continuous',
+                        seriesIndex: 0,
+                        dimension: 0,
+                        min: 0,
+                        max: dateList.length - 1,
+                        inRange: {
+                            color: ['#43ABF8', '#0407DC']
+                        }
+                    }],
+                    title: {
+                        left: 'center',
+                        text: `${currentSensorId} Dissolved Oxygen % and Temperature`
+                    },
+                    tooltip: {
+                        trigger: 'axis'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: dateList
+                    },
+                    yAxis: [
+                        {
+                            type: 'value',
+                            name: 'Oxygen Level (%)',
+                            position: 'left',
+                            splitLine: {
+                                show: false
+                            }
+                        },
+                        {
+                            type: 'value',
+                            name: 'Temperature (°C)',
+                            position: 'right',
+                            splitLine: {
+                                show: false
+                            }
+                        }
+                    ],
+                    grid: {
+                        bottom: '30%'
+                    },
+                    series: [
+                        {
+                            name: "Oxygen Levels",
+                            type: 'line',
+                            yAxisIndex: 0,
+                            showSymbol: false,
+                            data: oxygen,
+                            lineStyle: {
+                                width: 2,
+                                type: 'solid'
+                            }
+                        },
+                        {
+                            name: "Temperature",
+                            type: 'line',
+                            yAxisIndex: 1,
+                            showSymbol: false,
+                            data: temperature,
+                            lineStyle: {
+                                width: 2,
+                                type: 'solid'
+                            },
+                            itemStyle: {
+                                color: '#ff6600'
+                            }
+                        }
+                    ],
+                    dataZoom: [
+                        {
+                            type: 'inside', // Enables zooming and filtering using mouse wheel or touch gestures
+                            xAxisIndex: 0
+                        },
+                        {
+                            type: 'slider', // Adds a slider to control the zoom and filtering range
+                            xAxisIndex: 0,
+                            handleSize: '50%', // Adjust size of the handle
+                            handleStyle: {
+                                color: '#fff',
+                                borderColor: '#aaa',
+                                borderWidth: 2
+                            },
+                            textStyle: {
+                                color: '#000',
+                                fontSize: 14 // Adjust text size for better readability
+                            },
+                            backgroundColor: 'rgba(0,0,0,0.1)',
+                            dataBackground: {
+                                areaStyle: {
+                                    color: 'rgba(0,0,0,0.2)'
+                                }
+                            },
+                            borderColor: '#ddd',
+                            fillerColor: 'rgba(0,0,0,0.2)',
+                            height: 8 // Adjust height of the slider track
+                        }
+                    ]
+                };
+
+                chart3.setOption(option3);
+            })
+            .catch(error => console.error('Error fetching data:', error));
+
+        }
+        
+    </script>
+</body>
+</html>
